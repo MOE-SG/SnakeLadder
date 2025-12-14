@@ -1,281 +1,329 @@
+document.addEventListener('DOMContentLoaded', () => {
+    const BOARD_ROWS = 9;
+    const BOARD_COLS = 6;
+    const TOTAL_SQUARES = BOARD_ROWS * BOARD_COLS;
+    const NUM_PLAYERS = 20;
+    const ADMIN_PASSWORD = "admin"; // Client-side password (as requested)
 
-/* script.js — Power Apps bridge, now honoring CSS popup buttons */
-(function () {
-  const qs = new URLSearchParams(location.search);
-  const gameId = qs.get('gameId') || String(Date.now());
-  const flowUrl = qs.get('flowUrl') || null;
+    const boardElement = document.getElementById('game-board');
+    const rollDiceBtn = document.getElementById('roll-dice-btn');
+    const diceFaceElement = document.getElementById('dice-face');
+    const playerListElement = document.getElementById('player-list');
+    const messageArea = document.getElementById('message-area');
+    const resetGameBtn = document.getElementById('reset-game-btn');
+    const saveGameBtn = document.getElementById('save-game-btn');
+    const loadGameBtn = document.getElementById('load-game-btn');
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    const adminModal = document.getElementById('admin-modal');
+    const adminLoginBtn = document.getElementById('admin-login-btn');
+    const adminApplyBtn = document.getElementById('admin-apply-btn');
+    const adminPasswordInput = document.getElementById('admin-password');
+    const adminUserIdInput = document.getElementById('admin-user-id');
+    const adminRollsInput = document.getElementById('admin-rolls');
+    const adminLoggedInDiv = document.getElementById('admin-logged-in');
 
-  // Parse users=Alice:1:15,Bob:2:0
-  const usersParam = qs.get('users') || '';
-  const parsedUsers = usersParam
-    .split(',')
-    .map(x => x.trim())
-    .filter(Boolean)
-    .map(x => {
-      const [name, playerStr, tileStr] = x.split(':');
-      return {
-        name: name || `P${playerStr}`,
-        player: Math.max(1, Math.min(4, parseInt(playerStr || '1', 10))),
-        tile: Math.max(0, Math.min(106, parseInt(tileStr || '0', 10)))
-      };
-    });
+    let gameState = {
+        players: [],
+        currentPlayerIndex: 0,
+        rollsRemaining: 1,
+    };
 
-  // Parse rolls=1:2,2:3
-  const rollsAllowed = {};
-  (qs.get('rolls') || '')
-    .split(',').map(x => x.trim()).filter(Boolean)
-    .forEach(x => {
-      const [pStr, rStr] = x.split(':');
-      const p = Math.max(1, Math.min(4, parseInt(pStr || '1', 10)));
-      const r = Math.max(0, parseInt(rStr || '0', 10));
-      rollsAllowed[p] = r;
-    });
+    // Define Snakes and Ladders for the 6x9 grid (positions 1 to 54)
+    // Format: { start: end }
+    const snakes = {
+        52: 12,
+        45: 23,
+        34: 14,
+        28: 8,
+        17: 5,
+    };
 
-  const initialTurn = Math.max(1, Math.min(4, parseInt(qs.get('turn') || '1', 10)));
+    const ladders = {
+        3: 21,
+        7: 29,
+        18: 38,
+        26: 48,
+        41: 53,
+    };
 
-  /** helpers **/
-  const check   = id => { const el = document.getElementById(id); if (el) el.checked = true; };
-  const uncheck = id => { const el = document.getElementById(id); if (el) el.checked = false; };
+    const playerColors = [
+        '#FF6347', '#4682B4', '#32CD32', '#FFD700', '#9370DB', '#FF69B4', '#00CED1', '#FF4500', 
+        '#DA70D6', '#8FBC8F', '#DC143C', '#00BFFF', '#ADFF2F', '#FF8C00', '#4B0082', '#FF1493',
+        '#1E90FF', '#FF7F50', '#7FFF00', '#D2691E'
+    ];
 
-  /** create cb-pl radios so CSS movement rules work */
-  const createPositionRadios = () => {
-    const frag = document.createDocumentFragment();
-    for (let p = 1; p <= 4; p++) {
-      for (let i = 0; i <= 106; i++) {
-        const input = document.createElement('input');
-        input.type  = 'radio';
-        input.id    = `cb-pl${p}-${i}`;
-        input.className = 'cb';
-        input.name  = `cb-player${p}`;
-        frag.appendChild(input);
-      }
-    }
-    document.body.insertBefore(frag, document.getElementById('game'));
-  };
-
-  /** piece visibility */
-  const setPieceVisibility = (player, show) => {
-    const piece = document.getElementById(`piece-player-${player}`);
-    if (!piece) return;
-    piece.style.display = show ? '' : 'none';
-  };
-
-  /** move piece (check proper tile radio) */
-  const setPlayerPosition = (player, tile) => {
-    for (let i = 0; i <= 106; i++) uncheck(`cb-pl${player}-${i}`);
-    check(`cb-pl${player}-${tile}`);
-    state.positions[player - 1] = tile;
-    updateScoreboard();
-  };
-
-  /** board rules (edit if your board differs) */
-  const snakes  = { 16: 6, 46: 25, 49: 11, 62: 19, 64: 60, 74: 53, 89: 68, 92: 88, 95: 75, 99: 80 };
-  const ladders = {  2:38,  7:14,  8:31, 15:26, 21:42, 28:84, 36:44, 51:67, 71:91, 78:98, 87:94 };
-  const HOME = 100;
-
-  /** state */
-  const state = {
-    gameId,
-    players: [],
-    positions: [0,0,0,0],
-    rollsRemaining: {1:0,2:0,3:0,4:0},
-    turn: initialTurn,
-    pendingMove: null // {type:'ladder'|'snake'|'home', player, fromTile, toTile}
-  };
-
-  /** scoreboard */
-  const updateScoreboard = () => {
-    const el = document.getElementById('scoreboard');
-    if (!el) return;
-    el.style.display = 'block';
-    el.innerHTML = `
-      <div style="background:#fff;border:1px solid #ccc;border-radius:4px;padding:.5rem;max-width:420px;">
-        <strong>Game ${state.gameId}</strong><br/>
-        ${state.players.map(u => {
-          const pos = state.positions[u.player - 1];
-          const turnTxt = (u.player === state.turn) ? ` (turn, rolls left: ${state.rollsRemaining[u.player] || 0})` : '';
-          return `<div>• ${u.name} (P${u.player}) — Tile ${pos}${turnTxt}</div>`;
-        }).join('')}
-      </div>
-    `;
-  };
-
-  /** turn & dice gate */
-  const gateDiceUI = () => {
-    const diceLabel = document.getElementById('diceLabel');
-    if (!diceLabel) return;
-    const r = state.rollsRemaining[state.turn] || 0;
-    const blocked = !!state.pendingMove || r <= 0;
-    diceLabel.style.pointerEvents = blocked ? 'none' : 'auto';
-    diceLabel.style.opacity       = blocked ? '0.5' : '1';
-    diceLabel.setAttribute('title', blocked
-      ? (state.pendingMove ? 'Resolve popup first' : 'No rolls remaining')
-      : `Rolls left: ${r}`);
-  };
-
-  const setTurn = (p) => {
-    const t = Math.max(1, Math.min(4, parseInt(p, 10)));
-    check(`turn${t}`);
-    state.turn = t;
-    state.rollsRemaining[t] = (typeof rollsAllowed[t] === 'number')
-      ? rollsAllowed[t]
-      : ((Object.keys(rollsAllowed).length > 0) ? 0 : 1);
-    gateDiceUI();
-    updateScoreboard();
-  };
-
-  /** roll */
-  const rollDice = async () => {
-    if (state.pendingMove) return; // wait until popup confirmed
-    const p = state.turn;
-    const remaining = state.rollsRemaining[p] || 0;
-    if (remaining <= 0) return;
-
-    const roll = Math.floor(Math.random() * 6) + 1;
-    let next = state.positions[p - 1] + roll;
-
-    // bounce if overshoot
-    if (next > HOME) {
-      // Place on HOME first so CSS can show #home-popup (for radios like -101..-106 in your CSS)
-      // We’ll then wait for confirm to bounce back.
-      const overshoot = next - HOME;
-      setPlayerPosition(p, HOME);
-      state.pendingMove = {
-        type: 'home',
-        player: p,
-        fromTile: HOME,
-        toTile: HOME - overshoot
-      };
-      afterRollLog(p, roll, state.positions[p - 1]); // optional log
-      gateDiceUI();
-      return;
+    function initGame() {
+        createBoard();
+        createPlayers();
+        renderPlayerList();
+        updateUI();
+        setMessage(`Game started! It's ${gameState.players[gameState.currentPlayerIndex].name}'s turn.`);
     }
 
-    // If ladder/snake tile: place on trigger tile and wait for popup confirm
-    if (ladders[next]) {
-      setPlayerPosition(p, next);
-      state.pendingMove = { type: 'ladder', player: p, fromTile: next, toTile: ladders[next] };
-      afterRollLog(p, roll, state.positions[p - 1]);
-      gateDiceUI();
-      return;
+    function createBoard() {
+        boardElement.innerHTML = '';
+        for (let i = 1; i <= TOTAL_SQUARES; i++) {
+            const square = document.createElement('div');
+            square.classList.add('square');
+
+            // Alternate colors
+            const row = Math.floor((i - 1) / BOARD_COLS);
+            const col = (i - 1) % BOARD_COLS;
+            // Reverse direction every second row (snake pattern numbering)
+            let logicalPosition;
+            if (row % 2 === 0) {
+                logicalPosition = TOTAL_SQUARES - i + 1;
+            } else {
+                // If it's an even-indexed row (0-based), it's the reverse row
+                // We need to calculate the position differently to count up
+                const startOfRow = (row * BOARD_COLS) + 1;
+                const endOfRow = (row * BOARD_COLS) + BOARD_COLS;
+                const offsetInRow = col;
+                logicalPosition = startOfRow + (BOARD_COLS - 1 - offsetInRow);
+            }
+
+            // Assign the correct number for display
+            let displayPosition = TOTAL_SQUARES - i + 1;
+            
+            // Add a temporary ID based on actual board position for styling
+            square.id = `square-${displayPosition}`;
+
+            // Add alternate colors for grid pattern
+            if ((row + col) % 2 === 0) {
+                square.classList.add('color-light');
+            } else {
+                square.classList.add('color-dark');
+            }
+
+            const numberSpan = document.createElement('span');
+            numberSpan.classList.add('square-number');
+            numberSpan.textContent = displayPosition;
+            square.appendChild(numberSpan);
+
+            // Add snake/ladder markers
+            if (snakes[displayPosition]) {
+                square.classList.add('snake');
+            } else if (ladders[displayPosition]) {
+                square.classList.add('ladder');
+            }
+
+            boardElement.appendChild(square);
+        }
     }
-    if (snakes[next]) {
-      setPlayerPosition(p, next);
-      state.pendingMove = { type: 'snake', player: p, fromTile: next, toTile: snakes[next] };
-      afterRollLog(p, roll, state.positions[p - 1]);
-      gateDiceUI();
-      return;
+
+    function createPlayers() {
+        gameState.players = [];
+        for (let i = 0; i < NUM_PLAYERS; i++) {
+            gameState.players.push({
+                id: i,
+                name: `Player ${i + 1}`,
+                position: 0, // Position 0 means not on the board yet (at the start line)
+                color: playerColors[i % playerColors.length],
+            });
+        }
     }
 
-    // Normal move (no popup)
-    setPlayerPosition(p, next);
-    state.rollsRemaining[p] = Math.max(0, remaining - 1);
-    afterRollLog(p, roll, next);
-    gateDiceUI();
-  };
+    function renderPlayerList() {
+        playerListElement.innerHTML = '';
+        gameState.players.forEach((player, index) => {
+            const li = document.createElement('li');
+            li.classList.add('player-item');
+            if (index === gameState.currentPlayerIndex) {
+                li.classList.add('active');
+            }
+            li.style.borderLeft = `5px solid ${player.color}`;
+            li.innerHTML = `
+                <span>${player.name}</span>
+                <span id="pos-${player.id}">Pos: ${player.position}</span>
+            `;
+            playerListElement.appendChild(li);
+        });
+    }
 
-  /** (optional) log to flow */
-  const afterRollLog = async (player, roll, position) => {
-    if (!flowUrl) return;
-    try {
-      await fetch(flowUrl, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          gameId: state.gameId,
-          player, roll, position,
-          positions: state.positions,
-          timestamp: new Date().toISOString()
-        })
-      });
-    } catch(e) { console.error('Flow POST failed', e); }
-  };
+    function updateUI() {
+        // Update player positions on the board
+        // First, clear all tokens from the board visually
+        document.querySelectorAll('.player-token').forEach(token => token.remove());
 
-  /** init users/colors */
-  const initUsers = () => {
-    for (let p = 1; p <= 4; p++) setPieceVisibility(p, false);
+        gameState.players.forEach(player => {
+            if (player.position > 0) {
+                // The square ID matches the position number
+                const square = document.getElementById(`square-${player.position}`);
+                if (square) {
+                    const token = document.createElement('div');
+                    token.classList.add('player-token');
+                    token.style.backgroundColor = player.color;
+                    // Position tokens slightly differently within the square to avoid overlap (simple grid offset)
+                    const tokenOffsetIndex = player.id % 4; // Use 4 simple spots within a cell
+                    const offsetX = (tokenOffsetIndex % 2 === 0) ? '20%' : '60%';
+                    const offsetY = (tokenOffsetIndex < 2) ? '20%' : '60%';
+                    token.style.transform = `translate(${offsetX}, ${offsetY})`;
+                    
+                    square.appendChild(token);
+                }
+            }
+        });
+        
+        // Update player list positions/active status
+        renderPlayerList();
+    }
 
-    parsedUsers.forEach(u => {
-      setPieceVisibility(u.player, true);
-      setPlayerPosition(u.player, u.tile);
-      state.players.push({ name: u.name, player: u.player, tile: u.tile });
-    });
+    function rollDice() {
+        rollDiceBtn.disabled = true;
+        diceFaceElement.classList.add('rolling');
+        
+        // Simulate rolling animation time
+        setTimeout(() => {
+            diceFaceElement.classList.remove('rolling');
+            const roll = Math.floor(Math.random() * 6) + 1;
+            diceFaceElement.textContent = roll;
+            movePlayer(roll);
+        }, 500);
+    }
 
-    if (state.players.length > 0) check('game-time');
+    function movePlayer(roll) {
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        let newPosition = currentPlayer.position + roll;
 
-    const colors = Math.max(1, Math.min(4, parseInt(qs.get('colors') || '1', 10)));
-    check(`colors${colors}`);
+        if (newPosition > TOTAL_SQUARES) {
+            newPosition = currentPlayer.position; // Stay put if roll is too high
+            setMessage(`${currentPlayer.name} rolled a ${roll} but went too far!`);
+        } else {
+            currentPlayer.position = newPosition;
+            setMessage(`${currentPlayer.name} moved to square ${newPosition}.`);
+        }
+        
+        updateUI();
 
-    [1,2,3,4].forEach(p => {
-      state.rollsRemaining[p] = (typeof rollsAllowed[p] === 'number') ? rollsAllowed[p] : 0;
-    });
-    updateScoreboard();
-  };
+        // Check for snakes or ladders after the move
+        setTimeout(() => checkSpecialSquares(currentPlayer, roll), 600);
+    }
 
-  /** popup button handlers */
-  const bindPopupButtons = () => {
-    // Ladder
-    document.getElementById('btnLadderConfirm')?.addEventListener('click', () => {
-      if (state.pendingMove?.type !== 'ladder') return;
-      const { player, toTile } = state.pendingMove;
-      setPlayerPosition(player, toTile);
-      state.pendingMove = null;
-      // consume one roll
-      state.rollsRemaining[player] = Math.max(0, (state.rollsRemaining[player] || 1) - 1);
-      gateDiceUI();
-    });
-    document.getElementById('btnLadderCancel')?.addEventListener('click', () => {
-      // Keep on ladder bottom; clear pendingMove
-      state.pendingMove = null;
-      gateDiceUI();
-    });
+    function checkSpecialSquares(player, roll) {
+        const currentPos = player.position;
+        if (snakes[currentPos]) {
+            const endPos = snakes[currentPos];
+            player.position = endPos;
+            setMessage(`🐍 Oh no! ${player.name} hit a snake and slid down to ${endPos}.`);
+            updateUI();
+        } else if (ladders[currentPos]) {
+            const endPos = ladders[currentPos];
+            player.position = endPos;
+            setMessage(`🪜 Yay! ${player.name} climbed a ladder to ${endPos}.`);
+            updateUI();
+        }
 
-    // Snake
-    document.getElementById('btnSnakeConfirm')?.addEventListener('click', () => {
-      if (state.pendingMove?.type !== 'snake') return;
-      const { player, toTile } = state.pendingMove;
-      setPlayerPosition(player, toTile);
-      state.pendingMove = null;
-      state.rollsRemaining[player] = Math.max(0, (state.rollsRemaining[player] || 1) - 1);
-      gateDiceUI();
-    });
-    document.getElementById('btnSnakeCancel')?.addEventListener('click', () => {
-      state.pendingMove = null;
-      gateDiceUI();
-    });
+        // Check for win condition
+        if (player.position === TOTAL_SQUARES) {
+            setMessage(`🎉 ${player.name} wins the game!`);
+            rollDiceBtn.disabled = true;
+            return;
+        }
 
-    // Home bounce
-    document.getElementById('btnHomeConfirm')?.addEventListener('click', () => {
-      if (state.pendingMove?.type !== 'home') return;
-      const { player, toTile } = state.pendingMove;
-      setPlayerPosition(player, toTile);
-      state.pendingMove = null;
-      state.rollsRemaining[player] = Math.max(0, (state.rollsRemaining[player] || 1) - 1);
-      gateDiceUI();
-    });
-    document.getElementById('btnHomeCancel')?.addEventListener('click', () => {
-      state.pendingMove = null;
-      gateDiceUI();
-    });
-  };
+        // Manage turns
+        if (roll !== 6) {
+            gameState.rollsRemaining--;
+        }
+        
+        if (gameState.rollsRemaining === 0) {
+            nextTurn();
+        } else {
+            setMessage(`Rolled a 6! ${player.name} gets another roll.`);
+            rollDiceBtn.disabled = false;
+        }
+    }
 
-  /** public API (optional postMessage scenarios) */
-  window.GameBridge = {
-    setTurn,
-    setPlayerPosition,
-    rollDice,
-    getState: () => state
-  };
+    function nextTurn() {
+        gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
+        gameState.rollsRemaining = 1;
+        setMessage(`It's ${gameState.players[gameState.currentPlayerIndex].name}'s turn.`);
+        rollDiceBtn.disabled = false;
+        renderPlayerList(); // Update active player highlighting
+    }
 
-  /** wire dice label */
-  document.getElementById('diceLabel')?.addEventListener('click', () => rollDice());
+    function setMessage(msg) {
+        messageArea.textContent = msg;
+    }
 
-  /** bootstrap */
-  window.addEventListener('DOMContentLoaded', () => {
-    createPositionRadios();
-    initUsers();
-    bindPopupButtons();
-    setTurn(initialTurn);
-  });
-})();
+    function resetGame() {
+        if (confirm("Are you sure you want to reset the entire game? All progress will be lost.")) {
+            createPlayers(); // Resets positions to 0
+            gameState.currentPlayerIndex = 0;
+            gameState.rollsRemaining = 1;
+            updateUI();
+            rollDiceBtn.disabled = false;
+            setMessage("Game has been reset. Player 1 starts.");
+            localStorage.removeItem('snakeAndLadderGameState'); // Clear saved state
+        }
+    }
 
+    function saveGame() {
+        try {
+            localStorage.setItem('snakeAndLadderGameState', JSON.stringify(gameState));
+            setMessage("Game state saved locally.");
+        } catch (error) {
+            setMessage("Failed to save game state.");
+        }
+    }
+
+    function loadGame() {
+        try {
+            const savedState = localStorage.getItem('snakeAndLadderGameState');
+            if (savedState) {
+                gameState = JSON.parse(savedState);
+                updateUI();
+                setMessage("Game state loaded successfully.");
+                rollDiceBtn.disabled = false;
+            } else {
+                setMessage("No saved game state found.");
+            }
+        } catch (error) {
+            setMessage("Failed to load game state.");
+        }
+    }
+
+    // --- Admin Functionality ---
+    adminPanelBtn.onclick = () => adminModal.style.display = "block";
+    document.querySelector('.close').onclick = () => adminModal.style.display = "none";
+    window.onclick = (event) => {
+        if (event.target == adminModal) adminModal.style.display = "none";
+    };
+
+    adminLoginBtn.onclick = () => {
+        if (adminPasswordInput.value === ADMIN_PASSWORD) {
+            adminLoggedInDiv.style.display = 'block';
+            adminLoginBtn.style.display = 'none';
+            adminPasswordInput.value = '';
+            setMessage("Admin logged in.");
+        } else {
+            alert("Incorrect password.");
+        }
+    };
+
+    adminApplyBtn.onclick = () => {
+        const userId = parseInt(adminUserIdInput.value);
+        const rolls = parseInt(adminRollsInput.value);
+
+        if (!isNaN(userId) && userId >= 0 && userId < NUM_PLAYERS && !isNaN(rolls) && rolls > 0) {
+            gameState.currentPlayerIndex = userId;
+            gameState.rollsRemaining = rolls;
+            updateUI();
+            adminModal.style.display = 'none';
+            adminLoggedInDiv.style.display = 'none';
+            adminLoginBtn.style.display = 'inline-block';
+            setMessage(`Admin set ${gameState.players[userId].name} as next player with ${rolls} rolls.`);
+        } else {
+            alert("Invalid user ID or rolls count.");
+        }
+    };
+
+
+    // --- Event Listeners ---
+    rollDiceBtn.addEventListener('click', rollDice);
+    resetGameBtn.addEventListener('click', resetGame);
+    saveGameBtn.addEventListener('click', saveGame);
+    loadGameBtn.addEventListener('click', loadGame);
+
+    // Initialize the game on load
+    initGame();
+});
