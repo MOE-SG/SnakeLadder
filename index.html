@@ -5,11 +5,16 @@
   <meta charset="utf-8" />
   <title>Snakes & Ladders (Power Apps–controlled)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Your existing CSS -->
-  <link rel="stylesheet" href="style.css" />
+  style.css
   <style>
-    /* Small helper styles for scoreboard */
+    /* Scoreboard helper styling */
     #scoreboard { position: fixed; top: 0.5rem; right: 0.5rem; z-index: 99999; }
+    .popup-actions { margin-top: 0.75rem; display: flex; gap: .5rem; }
+    .popup-btn {
+      background: #4a5; color: #fff; border-radius: 3px; padding: .5rem .75rem;
+      cursor: pointer; border: 0; font-size: .9rem;
+    }
+    .popup-btn:hover { background: #3d984c; }
   </style>
 </head>
 <body>
@@ -21,49 +26,76 @@
   <input type="radio" id="turn3" name="turn" />
   <input type="radio" id="turn4" name="turn" />
 
-  <!-- color scheme radios (CSS uses #colors1..#colors4) -->
+  <!-- color scheme radios -->
   <input type="radio" id="colors1" name="colors" />
   <input type="radio" id="colors2" name="colors" />
   <input type="radio" id="colors3" name="colors" />
   <input type="radio" id="colors4" name="colors" />
 
-  <!-- Scoreboard (JS will show/hide/update) -->
+  <!-- Scoreboard -->
   <div id="scoreboard" style="display:none"></div>
 
-  <!-- game container (tabs + board + pieces) -->
+  <!-- game container -->
   <div id="game">
+    <!-- Use the CSS dice label that your stylesheet recognizes -->
+    <label class="dice" id="diceLabel" title="Roll the Dice"></label>
+
     <div class="tab" id="player-info"><span></span></div>
-    <div class="tab" id="dice" title="Roll the Dice">Roll</div>
     <div class="tab" id="action"><label id="next-turn"></label></div>
     <div class="tab" id="more-info">More info</div>
 
-    <div id="board">
-      <!-- You can add your SVG board graphics here if you want -->
-      <!-- The CSS will still position pieces using bottom/left via radios -->
-    </div>
+    <div id="board"></div>
 
-    <!-- four playing pieces; CSS handles colors via #colors* radios -->
-    <svg id="piece-player-1" class="piece" viewBox="0 0 100 100">
-      <g><circle cx="50" cy="50" r="35"/></g>
-    </svg>
-    <svg id="piece-player-2" class="piece" viewBox="0 0 100 100">
-      <g><rect x="20" y="20" width="60" height="60" rx="8"/></g>
-    </svg>
-    <svg id="piece-player-3" class="piece" viewBox="0 0 100 100">
-      <g><polygon points="50,15 85,85 15,85"/></g>
-    </svg>
-    <svg id="piece-player-4" class="piece" viewBox="0 0 100 100">
-      <g><ellipse cx="50" cy="50" rx="35" ry="25"/></g>
-    </svg>
+    <!-- four pieces -->
+    <svg id="piece-player-1" class="piece" viewBox="0 0 100 100"><g><circle cx="50" cy="50" r="35"/></g></svg>
+    <svg id="piece-player-2" class="piece" viewBox="0 0 100 100"><g><rect x="20" y="20" width="60" height="60" rx="8"/></g></svg>
+    <svg id="piece-player-3" class="piece" viewBox="0 0 100 100"><g><polygon points="50,15 85,85 15,85"/></g></svg>
+    <svg id="piece-player-4" class="piece" viewBox="0 0 100 100"><g><ellipse cx="50" cy="50" rx="35" ry="25"/></g></svg>
   </div>
 
-  <!-- popup containers referenced by the CSS -->
-  <div id="ladder-popup" class="scrim"><div class="box"><h1>Ladder!</h1><div>Climb up!</div></div></div>
-  <div id="snake-popup"  class="scrim"><div class="box"><h1>Snake!</h1><div>Move down!</div></div></div>
-  <div id="home-popup"   class="scrim"><div class="box"><h1>Home bounce</h1><div>Bounced back.</div></div></div>
-  <div id="congratulations" class="scrim"><div class="box"><h1>Winner!</h1><div>Reload to play again.</div></div></div>
+  <!-- Popups: CSS shows these when tile radios match ladder/snake/home conditions -->
+  <div id="ladder-popup" class="scrim">
+    <div class="box">
+      <h1>Ladder!</h1>
+      <div>Yay! You found a ladder. Click to climb:</div>
+      <div class="popup-actions">
+        <button class="popup-btn" id="btnLadderConfirm">Move Up</button>
+        <button class="popup-btn" id="btnLadderCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="snake-popup" class="scrim">
+    <div class="box">
+      <h1>Snake!</h1>
+      <div>Oh no! The snake bit you. Click to move down:</div>
+      <div class="popup-actions">
+        <button class="popup-btn" id="btnSnakeConfirm">Move Down</button>
+        <button class="popup-btn" id="btnSnakeCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="home-popup" class="scrim">
+    <div class="box">
+      <h1>Home bounce</h1>
+      <div>You reached home but overshot. Click to bounce back.</div>
+      <div class="popup-actions">
+        <button class="popup-btn" id="btnHomeConfirm">Bounce Back</button>
+        <button class="popup-btn" id="btnHomeCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="congratulations" class="scrim">
+    <div class="box">
+      <h1>Winner!</h1>
+      <div>Reload to play again.</div>
+    </div>
+  </div>
 
   <noscript>This page needs JavaScript enabled (for Power Apps control).</noscript>
-  <script src="script.js"></script>
+  script.js</script>
 </body>
 </html>
+
