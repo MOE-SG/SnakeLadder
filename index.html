@@ -3,47 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake and Ladder 54 Squares</title>
-     <link rel="stylesheet" href="styles.css">
+    <title>Rainbow Snakes & Ladders - Pro Standalone</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <div id="board"></div>
-        <div class="controls-container">
-            <h1>Snakes & Ladders (54)</h1>
-            <div class="dice-container">
-                <div id="dice" onclick="rollDice()">
-                    <span id="dice-value">1</span>
-                </div>
-                <button onclick="rollDice()">Roll Dice</button>
+ 
+    <div id="game-layout">
+        <aside id="status-panel">
+            <h2 class="rainbow-header">🏆 Rankings</h2>
+            <div id="leaderboard-container">
+                <table id="leaderboard">
+                    <thead>
+                        <tr><th>Player</th><th>Pos</th><th>Rolls</th></tr>
+                    </thead>
+                    <tbody id="player-rows"></tbody>
+                </table>
             </div>
-            
-            <button onclick="resetGame()">Reset Game</button>
-            <button onclick="saveGame()">Save Game</button>
-            <button onclick="loadGame()">Load Game</button>
-            <button onclick="toggleAdminPanel()">Admin Controls</button>
+        </aside>
 
-            <div id="admin-panel" style="display: none;">
-                <h3>Admin</h3>
-                <input type="password" id="admin-password" placeholder="Password">
-                <button onclick="adminLogin()">Login</button>
-                <div id="admin-controls-inner" style="display: none;">
-                    <label for="next-player-select">Set Next Player:</label>
-                    <select id="next-player-select"></select>
-                    <button onclick="setNextPlayer()">Set Player</button>
-                    <label for="admin-rolls">Set Rolls for Next Turn:</label>
-                    <input type="number" id="admin-rolls" min="1" max="6" value="1">
-                    <button onclick="setAdminRolls()">Set Rolls</button>
-                </div>
+        <main id="board-area">
+            <div id="board-container">
+                <div id="board"></div>
+                <svg id="svg-layer" viewBox="0 0 600 600"></svg>
+                <div id="tokens-layer"></div>
             </div>
+        </main>
 
-            <div id="player-list">
-                <h3>Players: <span id="current-player-name"></span>'s Turn</h3>
-                <ul id="players"></ul>
-            </div>
+        <aside id="control-panel">
+            <section id="player-controls">
+                <h2>🎲 Game Controls</h2>
+                <div class="control-card active-turn">
+                    <div id="turn-indicator">Waiting...</div>
+                    <div id="roll-counter">Rolls available: 0</div>
+                    <div id="dice-result">🎲 -</div>
+                    <button id="roll-btn" class="primary-btn" onclick="handleRollClick()">ROLL DICE</button>
+                    <button id="pass-btn" class="secondary-btn" onclick="nextTurn()">END TURN / PASS</button>
+                </div>
+            </section>
+
+            <section id="admin-panel">
+                <h3>🛠 Administrator</h3>
+                <div id="admin-login-ui">
+                    <input type="password" id="admin-pass" placeholder="Password">
+                    <button class="login-btn" onclick="loginAdmin()">Login</button>
+                </div>
+                <div id="admin-tools" class="hidden">
+                    <div class="admin-group">
+                        <label>Rolls to Grant:</label>
+                        <input type="number" id="grant-amt" value="5" min="1">
+                    </div>
+                    <button class="admin-btn" onclick="grantRollsToAll()">Give to All</button>
+                    <div class="admin-group">
+                        <select id="select-player"></select>
+                        <button class="admin-btn" onclick="grantRollsToSpecific()">Give to Selected</button>
+                    </div>
+                    <div class="admin-group" style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 15px;">
+                    <button class="admin-btn save-btn" onclick="saveGameState()">💾 Save Game to File</button>
+                    <label for="load-file" class="admin-btn load-label">📂 Load Game File</label>
+                    <input type="file" id="load-file" accept=".json" onchange="loadGameState(event)" style="display:none;">
+                    </div><button class="logout-btn" onclick="logoutAdmin()">Logout Admin</button>
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <div id="event-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 id="modal-title"></h2>
+            <p id="modal-text"></p>
+            <button id="modal-confirm-btn">OK</button>
         </div>
     </div>
-    <script src="https://moe-sg.github.io/SnakeLadder/script.js"></script>
+<div id="fireworks-container" class="hidden"></div>
+   <audio id="dice-sound" src="https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3" preload="auto"></audio>
+    <script src="script.js"></script>
 </body>
 </html>
-
