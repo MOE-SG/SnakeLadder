@@ -298,7 +298,7 @@ function drawPortals() {
             // --- SNAKE DRAWING ---
             // Move head to the top-right of the tile (x+18, y-18)
             const sHead = getTilePoint(start, 18, -18);
-            const eTail = getTilePoint(end, -18, 18);
+            const eTail = getTilePoint(end, 18, 18);
             
             const midX = (sHead.x + eTail.x) / 2 + 40;
             const midY = (sHead.y + eTail.y) / 2;
@@ -306,9 +306,12 @@ function drawPortals() {
             createSVG('path', {d: `M${sHead.x},${sHead.y} Q${midX},${midY} ${eTail.x},${eTail.y}`, class: 'snake-body'}, svg);
             
             // Head and Eyes
-            createSVG('circle', {cx: sHead.x, cy: sHead.y, r: 7, class: 'snake-head'}, svg);
-            createSVG('circle', {cx: sHead.x-2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
-            createSVG('circle', {cx: sHead.x+2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
+            createSVG('ellipse', {rx: 9, ry: 5, cx: sHead.x, cy: sHead.y, class: 'snake-head'}, svg);
+            //createSVG('circle', {cx: sHead.x-2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
+            //createSVG('circle', {cx: sHead.x+2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
+            // Change to just one eye on top of head - view side way
+            createSVG('cricle', {cx: sHead.x, cy: sHead.y+4, r: 4,  fill: 'white'}, svg);
+            createSVG('circle', {cx: sHead.x, cy: sHead.y+7, r: 2, fill: 'black'}, svg);
         }
     });
 }
