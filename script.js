@@ -35,7 +35,7 @@ function init() {
             div.innerText = tileNum;
 
             const hue = (tileNum * (360 / boardSize));
-            div.style.backgroundColor = `hsl(${hue}, 45%, 20%)`;
+            div.style.backgroundColor = `hsla(${hue}, 45%, 20%, 0.6)`;
             board.appendChild(div);
         }
     }
@@ -46,6 +46,16 @@ function init() {
         select.appendChild(opt);
     });
 
+  // ADD THIS AT THE BOTTOM OF init()
+    window.addEventListener('click', () => {
+        // We use a custom property to make sure it only tests once
+        if (!window.audioTested) {
+            testFireworks();
+            runAudioTest();
+            window.audioTested = true;
+        }
+    }, { once: true });
+  
     drawPortals();
     updateUI();
 }
@@ -105,16 +115,33 @@ function checkPortalsAndFinish(player) {
         const end = portals[player.pos];
         const isLadder = end > player.pos;
         
-        showModal(
-            isLadder ? "Ladder! 🪜" : "Snake! 🐍", 
-            `${player.name} moves to ${end}.`, 
-            () => {
-                player.pos = end;
-                updateUI();
-                // Brief pause after sliding before unlocking
-                setTimeout(() => finalizeTurn(player), 500);
-            }
-        );
+        // 1. Play the sound FIRST
+        const sound = isLadder ? 
+            document.getElementById('tiger-roar') : 
+            document.getElementById('hiss-sound');
+
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Playback blocked"));
+        }
+
+        // 2. Wait 1.2 seconds for the sound to finish/play out
+        setTimeout(() => {
+            showModal(
+                isLadder ? "Tiger Leap! 🪜" : "Snake Bite! 🐍", 
+                `${player.name} is moving to tile ${end}.`, 
+                () => {
+                    // 3. Update the logical position
+                    player.pos = end;
+                    
+                    // 4. CRITICAL: Update UI to visually move the token to the new spot
+                    updateUI(); 
+                    
+                    // 5. Brief pause for the slide animation before finishing the turn
+                    setTimeout(() => finalizeTurn(player), 600);
+                }
+            );
+        }, 1200); 
     } else {
         finalizeTurn(player);
     }
@@ -263,55 +290,58 @@ function getTilePoint(num, xOff = 0, yOff = 0) {
 
 function drawPortals() {
     const svg = document.getElementById('svg-layer');
-    svg.innerHTML = '';
-    
-    Object.keys(portals).forEach(start => {
-        const end = portals[start];
-        
-        // Offset Logic: 
-        // We move the start/end points 20px away from the center 
-        // so the number in the middle stays clear.
-        const s = getTilePoint(start, 15, 15); // Bottom-right of start tile
-        const e = getTilePoint(end, -15, -15); // Top-left of end tile
+    const defs = svg.querySelector('defs').outerHTML;
+    svg.innerHTML = defs; 
 
-        if (end > start) {
-            // --- LADDER DRAWING ---
+    const portalKeys = Object.keys(portals);
+
+    // --- PASS 1: DRAW ALL SNAKES FIRST (Bottom Layer) ---
+    portalKeys.forEach(start => {
+        const end = portals[start];
+        if (end < start) { // It's a Snake
+            const s = getTilePoint(start, 0, 0);
+            const e = getTilePoint(end, 0, 0);
             const dx = e.x - s.x;
             const dy = e.y - s.y;
-            const angle = Math.atan2(dy, dx);
-            const gap = 7;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-            const ox = Math.cos(angle + Math.PI/2) * gap;
-            const oy = Math.sin(angle + Math.PI/2) * gap;
+            const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+            use.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#new-artwork-template");
+            use.setAttribute("transform", `
+                translate(${s.x}, ${s.y}) 
+                rotate(${angle}) 
+                scale(${dist / 300}, 1) 
+                translate(-40, -40)
+            `);
+            svg.appendChild(use);
+        }
+    });
 
-            createSVG('line', {x1: s.x-ox, y1: s.y-oy, x2: e.x-ox, y2: e.y-oy, class: 'ladder-side'}, svg);
-            createSVG('line', {x1: s.x+ox, y1: s.y+oy, x2: e.x+ox, y2: e.y+oy, class: 'ladder-side'}, svg);
+    // --- PASS 2: DRAW ALL LADDERS SECOND (Top Layer) ---
+    portalKeys.forEach(start => {
+        const end = portals[start];
+        if (end > start) { // It's a Ladder
+            const tile = document.getElementById(`tile-${start}`);
+            const hX = tile.offsetWidth / 2;
+            const hY = tile.offsetHeight / 2;
 
-            for (let i = 0.2; i <= 0.8; i += 0.2) {
-                createSVG('line', {
-                    x1: s.x - ox + dx * i, y1: s.y - oy + dy * i,
-                    x2: s.x + ox + dx * i, y2: s.y + oy + dy * i,
-                    class: 'ladder-rung'
-                }, svg);
-            }
-        } else {
-            // --- SNAKE DRAWING ---
-            // Move head to the top-right of the tile (x+18, y-18)
-            const sHead = getTilePoint(start, 18, -18);
-            const eTail = getTilePoint(end, 18, 18);
-            
-            const midX = (sHead.x + eTail.x) / 2 + 40;
-            const midY = (sHead.y + eTail.y) / 2;
-            
-            createSVG('path', {d: `M${sHead.x},${sHead.y} Q${midX},${midY} ${eTail.x},${eTail.y}`, class: 'snake-body'}, svg);
-            
-            // Head and Eyes
-            createSVG('ellipse', {rx: 9, ry: 5, cx: sHead.x, cy: sHead.y, class: 'snake-head'}, svg);
-            //createSVG('circle', {cx: sHead.x-2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
-            //createSVG('circle', {cx: sHead.x+2, cy: sHead.y-2, r: 1.2, fill: 'white'}, svg);
-            // Change to just one eye on top of head - view side way
-            createSVG('cricle', {cx: sHead.x, cy: sHead.y+4, r: 4,  fill: 'white'}, svg);
-            createSVG('circle', {cx: sHead.x, cy: sHead.y+7, r: 2, fill: 'black'}, svg);
+            const s = getTilePoint(start, hX, hY); 
+            const e = getTilePoint(end, -hX, -hY);
+            const dx = e.x - s.x;
+            const dy = e.y - s.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+
+            const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+            use.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#tiger-template");
+            use.setAttribute("transform", `
+                translate(${s.x},${s.y}) 
+                rotate(${angle}) 
+                scale(0.35, ${dist / 280}) 
+                translate(-100,-280)
+            `);
+            svg.appendChild(use);
         }
     });
 }
@@ -466,6 +496,79 @@ function loadGameState(event) {
         }
     };
     reader.readAsText(file);
+}
+
+/**
+ * AUDIO TESTER
+ * Plays all game sounds in sequence to verify they are loaded correctly.
+ */
+function runAudioTest() {
+    const dice = document.getElementById('dice-sound');
+    const hiss = document.getElementById('hiss-sound');
+    const roar = document.getElementById('tiger-roar');
+    const fireworksound = document.getElementById('firework-sound');
+    console.log("Starting Audio Test...");
+
+    // Play Dice Sound
+    dice.currentTime = 0;
+    dice.play().then(() => {
+        console.log("Dice sound: OK");
+        
+        // Wait 1.5s, then play Hiss
+        setTimeout(() => {
+            hiss.play();
+            console.log("Snake sound: OK");
+            
+            // Wait 1.5s, then play Roar
+            setTimeout(() => {
+                roar.play();
+                console.log("Tiger sound: OK");
+                setTimeout(() => {
+                    fireworksound.play();
+                    console.log("Tiger sound: OK");
+                }, 1500);
+            }, 1500);
+            
+        }, 1500);
+    }).catch(err => {
+        console.warn("Audio blocked! Click anywhere on the page to enable sound.");
+    });
+}
+
+/**
+ * TEST FIREWORKS
+ * Call this from the console or a temporary button to see the result
+ */
+function testFireworks() {
+    console.log("Testing Fireworks...");
+    
+    // Ensure container exists and is visible
+    const container = document.getElementById('fireworks-container');
+    container.classList.remove('hidden');
+    container.innerHTML = '';
+
+    // Create a few centered fireworks to see the effect clearly
+    for (let i = 0; i < 5; i++) {
+        const fw = document.createElement('div');
+        fw.className = 'firework';
+        
+        // Spread them across the middle
+        const x = (20 + (i * 15)) + 'vw'; 
+        const y = (20 + (Math.random() * 20)) + 'vh';
+        
+        fw.style.setProperty('--x', x);
+        fw.style.setProperty('--y', y);
+        fw.style.setProperty('--color', `hsl(${Math.random() * 360}, 100%, 60%)`);
+        fw.style.animationDelay = (i * 0.4) + 's';
+        
+        container.appendChild(fw);
+    }
+
+    // Auto-stop after 10 seconds for testing
+    setTimeout(() => {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+    }, 10000);
 }
 
 window.onload = init;
