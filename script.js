@@ -18,6 +18,55 @@ let players = playerNames.map((name, i) => ({
 
 let currentTurnIndex = 0;
 let isAnimating = false;
+let viewerConns = []; // <--- THIS LINE IS MISSING OR IN THE WRONG PLACE
+const peer = new Peer(); // Generates a random Room ID
+
+peer.on('open', (id) => {
+    document.getElementById('my-id').innerText = id;
+});
+
+peer.on('connection', (conn) => {
+    // Add to our list of viewers
+    viewerConns.push(conn);
+    
+    // Update the local viewer count display
+    document.getElementById('viewer-count').innerText = viewerConns.length;
+
+    // IMPORTANT: Wait for the specific connection to be 'open' before sending data
+    conn.on('open', () => {
+        console.log("Viewer joined. Sending initial sync...");
+        conn.send({
+            type: 'SYNC',
+            players: players,            // The full array of players
+            currentTurnIndex: currentTurnIndex,
+            viewerCount: viewerConns.length
+        });
+    });
+
+    conn.on('close', () => {
+        viewerConns = viewerConns.filter(c => c !== conn);
+        document.getElementById('viewer-count').innerText = viewerConns.length;
+        broadcast({ type: 'VIEWER_COUNT', count: viewerConns.length });
+    });
+});
+
+function updateViewerCount() {
+    const count = viewers.length;
+    document.getElementById('viewer-count').innerText = count;
+    broadcast({ type: 'VIEWER_COUNT', count: count });
+}
+
+function broadcast(data) {
+    viewerConns.forEach(conn => conn.send(data));
+}
+
+function broadcastState() {
+    broadcast({
+        type: 'UPDATE_STATE',
+        players: players,
+        currentTurnIndex: currentTurnIndex
+    });
+}
 
 function init() {
     const board = document.getElementById('board');
@@ -47,7 +96,7 @@ function init() {
     });
 
   // ADD THIS AT THE BOTTOM OF init()
-    window.addEventListener('click', () => {
+  /*  window.addEventListener('click', () => {
         // We use a custom property to make sure it only tests once
         if (!window.audioTested) {
             testFireworks();
@@ -55,7 +104,7 @@ function init() {
             window.audioTested = true;
         }
     }, { once: true });
-  
+  */
     drawPortals();
     updateUI();
 }
@@ -80,7 +129,12 @@ function handleRollClick() {
     // Play sound (reset to start first in case of rapid turns)
     diceSound.currentTime = 0;
     diceSound.play().catch(e => console.log("Sound blocked by browser policy. Interaction required first."));
-
+	
+	// --- P2P BROADCAST: Trigger Dice Sound for Viewers ---
+    broadcast({ 
+        type: 'ACTION_SOUND', 
+        soundId: 'dice-sound' 
+    });
     // 2. Wait 1.5 seconds (Simulating the dice roll)
     setTimeout(() => {
         diceDisplay.classList.remove('dice-rolling');
@@ -91,7 +145,12 @@ function handleRollClick() {
         const roll = Math.floor(Math.random() * 6) + 1;
         diceDisplay.innerText = `🎲 ${roll}`;
         player.rolls--;
-
+		// --- P2P BROADCAST: Send Roll Result to Viewers ---
+        broadcast({ 
+            type: 'DICE_ROLL_RESULT', 
+            roll: roll, 
+            playerId: player.id 
+        });
         // Calculate destination with bounce back
         let target = player.pos + roll;
         if (target > boardSize) {
@@ -101,7 +160,7 @@ function handleRollClick() {
         // 3. Move the player visually
         player.pos = target;
         updateUI();
-
+		broadcastState();
         // 4. Wait for token to land before checking portals
         setTimeout(() => {
             checkPortalsAndFinish(player);
@@ -114,33 +173,41 @@ function checkPortalsAndFinish(player) {
     if (portals[player.pos]) {
         const end = portals[player.pos];
         const isLadder = end > player.pos;
-        
+        console.log(`rolls ${player.rolls}`);
         // 1. Play the sound FIRST
-        const sound = isLadder ? 
-            document.getElementById('tiger-roar') : 
-            document.getElementById('hiss-sound');
+		const soundId = isLadder ? 'tiger-roar' : 'hiss-sound';
+		const sound = document.getElementById(soundId);
 
         if (sound) {
             sound.currentTime = 0;
             sound.play().catch(e => console.log("Playback blocked"));
         }
-
+		// --- P2P BROADCAST: Trigger Portal Sound for Viewers ---
+        broadcast({ type: 'ACTION_SOUND', soundId: soundId });
         // 2. Wait 1.2 seconds for the sound to finish/play out
         setTimeout(() => {
-            showModal(
-                isLadder ? "Tiger Leap! 🪜" : "Snake Bite! 🐍", 
-                `${player.name} is moving to tile ${end}.`, 
-                () => {
-                    // 3. Update the logical position
-                    player.pos = end;
-                    
-                    // 4. CRITICAL: Update UI to visually move the token to the new spot
-                    updateUI(); 
-                    
-                    // 5. Brief pause for the slide animation before finishing the turn
-                    setTimeout(() => finalizeTurn(player), 600);
-                }
-            );
+            const title = isLadder ? "Tiger Leap! 🪜" : "Snake Bite! 🐍";
+            const message = `${player.name} is moving to tile ${end}.`;
+				// 3. Show Local Modal
+				showModal(title, message, () => {
+					player.pos = end;
+					updateUI();
+					
+					// --- P2P BROADCAST: Sync Position after sliding ---
+					broadcast({ 
+						type: 'SYNC_POSITION', 
+						playerId: player.id, 
+						newPos: end 
+					});
+					broadcastState();
+					setTimeout(() => finalizeTurn(player), 600);
+				});
+			// --- P2P BROADCAST: Show Modal for Viewers ---
+            broadcast({ 
+                type: 'SHOW_MODAL', 
+                title: title, 
+                text: message 
+            });
         }, 1200); 
     } else {
         finalizeTurn(player);
@@ -150,18 +217,47 @@ function checkPortalsAndFinish(player) {
 function finalizeTurn(player) {
     if (player.pos === boardSize) {
         player.finished = true;
-        showModal("🏆 WINNER!", `${player.name} reached 64!`, () => {
-            launchFireworks();
+		const title = "🏆 WINNER!";
+        const message = `${player.name} has reached the goal!`;
+		launchFireworks();
+        // 2. Show local modal
+        showModal(title, message, () => {
+            // This runs when Player clicks "OK"
+            // This runs when the Host clicks "OK"
+            isAnimating = false; // UNLOCK the game
+            nextTurn();          // MOVE to the next player
         });
+		// BROADCAST: Viewers see the same title/text and start fireworks
+		broadcast({ type: 'SHOW_MODAL', title: title, text: message });
+		broadcast({ type: 'FIREWORKS' });
+		return;
     }
 
     isAnimating = false; // Unlock global state
+	console.log(`finalizeTurn called`);
     
     if (player.rolls <= 0 || player.finished) {
         nextTurn();
+		//console.log(`next turn`);
     } else {
         updateUI(); // This will re-enable the button via the standard updateUI logic
+		//console.log(`update UI`);
+		broadcastState();
     }
+}
+
+function stopFireworks() {
+    // Stop local
+    const fwSound = document.getElementById('firework-sound');
+    if (fwSound) {
+        fwSound.pause();
+        fwSound.currentTime = 0;
+    }
+    document.getElementById('fireworks-container').classList.add('hidden');
+
+    // Stop for viewers
+    broadcast({ type: 'HIDE_MODAL' });
+    broadcast({ type: 'STOP_FIREWORKS' });
 }
 
 function finalizeMove(player) {
@@ -198,6 +294,7 @@ function nextTurn() {
     }
 
     updateUI();
+	broadcastState();
 }
 
 /**
@@ -224,10 +321,22 @@ function finalizeMove(player) {
  * FIREWORKS ANIMATION
  */
 function launchFireworks() {
-    const container = document.getElementById('fireworks-container');
+    // 1. Play the sound locally for the Player
+    const fwSound = document.getElementById('firework-sound');
+    if (fwSound) {
+        fwSound.currentTime = 0;
+        fwSound.play().catch(e => console.log("Firework sound blocked"));
+    }
+
+    // 2. Broadcast to viewers to trigger their local sound and animation
+    broadcast({ type: 'ACTION_SOUND', soundId: 'firework-sound' });
+    broadcast({ type: 'FIREWORKS' });
+	
+	const container = document.getElementById('fireworks-container');
     container.classList.remove('hidden');
     container.innerHTML = ''; // Reset
 
+	// 3. Local animation logic
     for (let i = 0; i < 15; i++) {
         const fw = document.createElement('div');
         fw.className = 'firework';
@@ -244,7 +353,6 @@ function launchFireworks() {
     }, 10000);
 }
 
-// Ensure finalizeMove is called in your handleRollClick
 
 // --- 3. ADMIN TOOLS ---
 function loginAdmin() {
@@ -419,7 +527,23 @@ function showModal(title, text, onConfirm) {
     document.getElementById('modal-title').innerText = title;
     document.getElementById('modal-text').innerText = text;
     m.classList.remove('hidden');
-    document.getElementById('modal-confirm-btn').onclick = () => { m.classList.add('hidden'); onConfirm(); };
+	// where the game reset happens:
+	document.getElementById('modal-confirm-btn').onclick = () => { 
+		// 1. Stop local fireworks
+		stopFireworks(); 
+        m.classList.add('hidden');
+		//document.getElementById('fireworks-container').classList.add('hidden');
+		
+		// 2. Tell viewers to hide modal AND stop fireworks
+		broadcast({ type: 'HIDE_MODAL' });
+		broadcast({ type: 'STOP_FIREWORKS' });
+		
+		// 3. Hide local modal
+		//document.getElementById('event-modal').classList.add('hidden');
+		
+		// --- CRITICAL FIX: Run the callback logic! ---
+        if (onConfirm) onConfirm();
+	};
 }
 
 function createSVG(tag, attr, parent) {
@@ -499,6 +623,52 @@ function loadGameState(event) {
 }
 
 /**
+ * MANUAL ROLL ENTRY
+ * Allows inputting a physical dice result instead of generating a random one.
+ */
+function handleManualRoll() {
+    const player = players[currentTurnIndex];
+    if (player.rolls <= 0 || player.finished || isAnimating) return;
+
+    // 1. Prompt for result
+    const input = prompt(`Enter dice result for ${player.name} (1-6):`);
+    const roll = parseInt(input);
+
+    // 2. Validation
+    if (isNaN(roll) || roll < 1 || roll > 6) {
+        alert("Invalid input. Please enter a number between 1 and 6.");
+        return;
+    }
+
+    // 3. Update State & UI
+    isAnimating = true;
+    player.rolls--;
+    document.getElementById('dice-result').innerText = `🎲 ${roll}`;
+    
+    // 4. Sync Viewers
+    broadcast({ 
+        type: 'DICE_ROLL_RESULT', 
+        roll: roll, 
+        playerId: player.id 
+    });
+
+    // 5. Calculate Movement
+    let target = player.pos + roll;
+    if (target > boardSize) {
+        target = boardSize - (target - boardSize);
+    }
+    
+    player.pos = target;
+    updateUI();
+    broadcastState();
+
+    // 6. Finish move after a short delay
+    setTimeout(() => {
+        checkPortalsAndFinish(player);
+    }, 800);
+}
+
+/**
  * AUDIO TESTER
  * Plays all game sounds in sequence to verify they are loaded correctly.
  */
@@ -569,6 +739,75 @@ function testFireworks() {
         container.classList.add('hidden');
         container.innerHTML = '';
     }, 10000);
+}
+
+/**
+ * DEBUG: Force a win for the current player
+ */
+function debugWin() {
+    const player = players[currentTurnIndex];
+    console.log(`Debugging win for: ${player.name}`);
+    
+    player.pos = 64;      // Move to goal
+    player.rolls = 0;     // Ensure no rolls left
+    updateUI();           // Update board
+    finalizeTurn(player); // Trigger win logic
+}
+
+/**
+ * DEBUG: Autoplay Loop
+ * Automatically rolls and dismisses modals until everyone is out of rolls.
+ */
+let autoplayActive = false;
+let autoplayTimer = null;
+
+function toggleAutoplay() {
+    autoplayActive = !autoplayActive;
+    
+    if (autoplayActive) {
+        console.log("🛠️ Autoplay Started...");
+        runAutoplayStep();
+    } else {
+        console.log("🛑 Autoplay Stopped.");
+        clearTimeout(autoplayTimer);
+    }
+}
+
+function runAutoplayStep() {
+    if (!autoplayActive) return;
+
+    // 1. Check if anyone has rolls left
+    const totalRolls = players.reduce((sum, p) => sum + (p.finished ? 0 : p.rolls), 0);
+    if (totalRolls <= 0) {
+        console.log("✅ Autoplay Finished: No rolls remaining.");
+        autoplayActive = false;
+        return;
+    }
+
+    const modal = document.getElementById('event-modal');
+    const isModalVisible = !modal.classList.contains('hidden');
+    const activePlayer = players[currentTurnIndex];
+
+    // 2. Logic Branching
+    if (isModalVisible) {
+        // Automatically click "OK" on snakes, ladders, or win screens
+        console.log("Autoplay: Dismissing Modal...");
+        document.getElementById('modal-confirm-btn').click();
+    } 
+    else if (!isAnimating) {
+        // If it is the current player's turn and they have rolls, roll the dice
+        if (activePlayer.rolls > 0 && !activePlayer.finished) {
+            console.log(`Autoplay: Rolling for ${activePlayer.name}...`);
+            handleRollClick();
+        } else {
+            // If the player is finished or out of rolls, force a turn switch
+            console.log("Autoplay: Switching turn...");
+            nextTurn();
+        }
+    }
+
+    // 3. Schedule next check (every 1 second to allow animations to play)
+    autoplayTimer = setTimeout(runAutoplayStep, 1000);
 }
 
 window.onload = init;
