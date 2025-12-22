@@ -2,20 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snakes & Ladders - Tiger, Halliburton</title>
     <link rel="stylesheet" href="style.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="peerjs.min.js"></script>
 </head>
 <body>
- 
     <div id="game-layout">
         <aside id="status-panel">
-            <h2 class="tiger-text">🏆 Rankings</h2>
+            <h2 class="tiger-text">🐯 Rankings</h2>
+            <div id="p2p-info" style="background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--accent);">
+                <div style="font-size: 12px;">Room ID: <b id="my-id" style="color:white">Connecting...</b></div>
+                <div style="font-size: 11px;">Viewers Connected: <span id="viewer-count" style="color:var(--accent)">0</span></div>
+            </div>
             <div id="leaderboard-container">
                 <table id="leaderboard">
-                    <thead>
-                        <tr><th>Player</th><th>Pos</th><th>Rolls</th></tr>
-                    </thead>
+                    <thead><tr><th>Player</th><th>Pos</th><th>Rolls</th></tr></thead>
                     <tbody id="player-rows"></tbody>
                 </table>
             </div>
@@ -83,7 +85,8 @@
                                     z" />
                           <ellipse id="eye1" style="fill:#fff;" cx="58.6" cy="46" rx="2.8" ry="1.4" />
                           <ellipse id="eye2" style="fill:#fff;" cx="58.6" cy="66.6" rx="2.8" ry="1.4" />
-                        </g>                   
+                        </g>            
+
                     </defs>
                 </svg>
                 <div id="tokens-layer"></div>
@@ -97,8 +100,9 @@
                     <div id="turn-indicator">Waiting...</div>
                     <div id="roll-counter">Rolls available: 0</div>
                     <div id="dice-result">🎲 -</div>
-                    <button id="roll-btn" class="primary-btn" onclick="handleRollClick()">ROLL DICE</button>
-                    <button id="pass-btn" class="secondary-btn" onclick="nextTurn()">END TURN / PASS</button>
+					<button id="roll-btn" class="primary-btn" onclick="handleRollClick()">🎲 Digital Roll</button>
+					<button id="manual-roll-btn" class="secondary-btn" onclick="handleManualRoll()" style="background: #6366f1;">✍️ Manual Entry</button>
+					<button id="pass-btn" class="secondary-btn" onclick="nextTurn()">END TURN / PASS</button>
                 </div>
             </section>
 
@@ -122,24 +126,23 @@
                     <button class="admin-btn save-btn" onclick="saveGameState()">💾 Save Game to File</button>
                     <label for="load-file" class="admin-btn load-label">📂 Load Game File</label>
                     <input type="file" id="load-file" accept=".json" onchange="loadGameState(event)" style="display:none;">
+					<button class="secondary-btn" onclick="toggleAutoplay()" style="background: #8b5cf6;">🤖 Toggle Autoplay</button>
                     </div><button class="logout-btn" onclick="logoutAdmin()">Logout Admin</button>
                 </div>
             </section>
-        </aside>
+            </aside>
     </div>
 
     <div id="event-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 id="modal-title"></h2>
-            <p id="modal-text"></p>
-            <button id="modal-confirm-btn">OK</button>
-        </div>
+        <div class="modal-content"><h2 id="modal-title"></h2><p id="modal-text"></p><button id="modal-confirm-btn">OK</button></div>
     </div>
-<div id="fireworks-container" class="hidden"></div>
-   <audio id="dice-sound" src="dice-142528.mp3" preload="auto"></audio>
-  <audio id="hiss-sound" src="SnakeHiss.mp3" preload="auto"></audio>
-  <audio id="tiger-roar" src="tiger-roar-loudly-193229.mp3" preload="auto"></audio>
-   <audio id="firework-sound" src="fireworks-402788.mp3" preload="auto">
-    <script src="script.js"></script>
+    <div id="fireworks-container" class="hidden"></div>
+
+    <audio id="dice-sound" src="dice-142528.mp3"></audio>
+    <audio id="hiss-sound" src="SnakeHiss.mp3"></audio>
+    <audio id="tiger-roar" src="tiger-roar-loudly-193229.mp3"></audio>
+    <audio id="firework-sound" src="fireworks-402788.mp3" loop></audio>
+
+    <script src="script-player.js"></script>
 </body>
 </html>
