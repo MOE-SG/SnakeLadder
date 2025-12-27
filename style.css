@@ -297,3 +297,19 @@ body {
     cursor: not-allowed;
     transform: none !important;
 }
+
+#status-bar {
+    padding: 8px 15px;
+    font-weight: bold;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.3s;
+}
+
+.status-disconnected { background: #fee2e2; color: #dc2626; } /* Red */
+.status-connected { background: #dcfce7; color: #16a34a; }    /* Green */
+
+#status-dot { font-size: 1.2em; }
