@@ -3,7 +3,8 @@ const playerNames = ["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace"
 const adminPassword = "admin123";
 const boardSize = 64;
 const columns = 8;
-
+const pendingId = localStorage.getItem('pending_room_id');
+const pendingState = localStorage.getItem('pending_game_state');
 // SPECIFY PORTALS HERE: { StartTile: EndTile }
 // If End > Start, it's a Ladder. If Start > End, it's a Snake.
 const portals = { 
@@ -11,19 +12,55 @@ const portals = {
     22: 4, 37: 15, 50: 32, 62: 40  // Snakes
 };
 
+// --- 1. PLAYER CONFIGURATION (Updated) ---
 let players = playerNames.map((name, i) => ({
-    id: i + 1, name: name, pos: 1, rolls: 0, finished: false,
+    id: i + 1, 
+    name: name, 
+    pos: 0,              // Start outside the board
+    rolls: 0, 
+    totalRollsGiven: 0,  // Tracking total rolls granted
+    escapes: 0,          // Tracking snake escapes
+    finished: false,
     color: `hsl(${(i * 137.5) % 360}, 75%, 55%)`
 }));
 
 let currentTurnIndex = 0;
 let isAnimating = false;
 let viewerConns = []; // <--- THIS LINE IS MISSING OR IN THE WRONG PLACE
-const peer = new Peer(); // Generates a random Room ID
 
+// --- 2. PEERJS CONFIGURATION (With Port/Server Options) ---
+// If port 443 is blocked, you can specify a custom port or use a different server
+// PEERJS CONFIG: Host can change port here if 443 is blocked
+const peer = new Peer(pendingId || null, {
+    host: '0.peerjs.com',
+    port: 443, // Change this to 9000 or other if 443 is blocked
+    secure: true
+});
 peer.on('open', (id) => {
     document.getElementById('my-id').innerText = id;
+	// RECOVERY LOGIC: Check if we just refreshed to load a file
+    const pendingState = localStorage.getItem('pending_game_state');
+    if (pendingState) {
+        try {
+            const data = JSON.parse(pendingState);
+            
+            // Apply the saved state to the current game variables
+            players = data.players;
+            currentTurnIndex = data.currentTurnIndex;
+            
+            // Clear the temporary storage
+            localStorage.removeItem('pending_room_id');
+            localStorage.removeItem('pending_game_state');
+            
+            // Refresh the Host UI
+            updateUI();
+            console.log("Persistence: Game state restored from file after refresh.");
+        } catch (err) {
+            console.error("Failed to parse pending game state:", err);
+        }
+    }
 });
+
 
 peer.on('connection', (conn) => {
     // Add to our list of viewers
@@ -67,6 +104,15 @@ function broadcastState() {
         currentTurnIndex: currentTurnIndex
     });
 }
+
+// --- HEARTBEAT MECHANISM ---
+// Sends a small "pulse" to all viewers every 3 seconds to confirm the host is still active.
+setInterval(() => {
+    broadcast({ 
+        type: 'HEARTBEAT', 
+        timestamp: Date.now() 
+    });
+}, 3000);
 
 function init() {
     const board = document.getElementById('board');
@@ -173,23 +219,24 @@ function checkPortalsAndFinish(player) {
     if (portals[player.pos]) {
         const end = portals[player.pos];
         const isLadder = end > player.pos;
-        console.log(`rolls ${player.rolls}`);
+        //console.log(`rolls ${player.rolls}`);
         // 1. Play the sound FIRST
 		const soundId = isLadder ? 'tiger-roar' : 'hiss-sound';
 		const sound = document.getElementById(soundId);
 
-        if (sound) {
+		if (sound) {
             sound.currentTime = 0;
             sound.play().catch(e => console.log("Playback blocked"));
-        }
+        } 
 		// --- P2P BROADCAST: Trigger Portal Sound for Viewers ---
         broadcast({ type: 'ACTION_SOUND', soundId: soundId });
         // 2. Wait 1.2 seconds for the sound to finish/play out
         setTimeout(() => {
-            const title = isLadder ? "Tiger Leap! 🪜" : "Snake Bite! 🐍";
-            const message = `${player.name} is moving to tile ${end}.`;
+			if (isLadder) {
+            //const title = isLadder ? "Tiger Leap! 🪜" : "Snake Bite! 🐍";
+            //const message = `${player.name} is moving to tile ${end}.`;
 				// 3. Show Local Modal
-				showModal(title, message, () => {
+				showModal("Tiger Leap! 🪜", `${player.name} is moving to tile ${end}.`, () => {
 					player.pos = end;
 					updateUI();
 					
@@ -202,16 +249,76 @@ function checkPortalsAndFinish(player) {
 					broadcastState();
 					setTimeout(() => finalizeTurn(player), 600);
 				});
+			} else {
+                // NEW: Interactive Snake Choice
+				// SNAKE CHOICE LOGIC
+                showChoiceModal(
+                    "Snake Encounter! 🐍", 
+                    `${player.name}, do you manage to Escape?`,
+                    "Escape", // Option 1
+                    "Bitten", // Option 2
+                    () => { // Escape Choice
+                        player.escapes++;
+						broadcast({ type: 'HIDE_MODAL' })
+                        updateUI();
+                        broadcastState();
+                        finalizeTurn(player);
+                    },
+                    () => { // Bitten Choice
+                        player.pos = end;
+						broadcast({ type: 'HIDE_MODAL' })
+                        updateUI();
+                        broadcast({ type: 'SYNC_POSITION', playerId: player.id, newPos: end });
+                        setTimeout(() => finalizeTurn(player), 600);
+                    }
+                );
+            }
 			// --- P2P BROADCAST: Show Modal for Viewers ---
             broadcast({ 
                 type: 'SHOW_MODAL', 
-                title: title, 
-                text: message 
+                title: isLadder ? "Tiger Leap! 🪜" : "Snake Encounter! 🐍", 
+                text: `${player.name} is at a portal!`
             });
         }, 1200); 
     } else {
         finalizeTurn(player);
     }
+}
+
+// Added Updated Modal with two buttons
+function showChoiceModal(title, text, btn1Text, btn2Text, onBtn1, onBtn2) {
+    const m = document.getElementById('event-modal');
+    document.getElementById('modal-title').innerText = title;
+    document.getElementById('modal-text').innerText = text;
+    
+    // Create/Configure Buttons
+    const btn1 = document.getElementById('modal-confirm-btn');
+    btn1.innerText = btn1Text;
+    
+    // Check for/Create second button
+    let btn2 = document.getElementById('modal-choice-btn');
+    if (!btn2) {
+        btn2 = document.createElement('button');
+        btn2.id = 'modal-choice-btn';
+        btn2.className = 'primary-btn';
+        btn1.parentNode.appendChild(btn2);
+    }
+    btn2.innerText = btn2Text;
+    btn2.style.display = "inline-block";
+
+    m.classList.remove('hidden');
+
+    btn1.onclick = () => {
+        m.classList.add('hidden');
+        btn2.style.display = "none";
+        onBtn1();
+    };
+
+    btn2.onclick = () => {
+        m.classList.add('hidden');
+        btn2.style.display = "none";
+        onBtn2();
+    };
 }
 
 function finalizeTurn(player) {
@@ -260,11 +367,6 @@ function stopFireworks() {
     broadcast({ type: 'STOP_FIREWORKS' });
 }
 
-function finalizeMove(player) {
-    if (player.pos === boardSize) player.finished = true;
-    if (player.rolls <= 0 || player.finished) nextTurn();
-    else updateUI();
-}
 
 /**
  * IMPROVED TURN LOGIC
@@ -370,15 +472,21 @@ function logoutAdmin() {
 
 function grantRollsToAll() {
     const amt = parseInt(document.getElementById('grant-amt').value) || 0;
-    players.forEach(p => p.rolls += amt);
+    players.forEach(p => {
+		p.rolls += amt;
+		p.totalRollsGiven += amt; //added
+	});
     updateUI();
+	broadcastState(); // sync with viewer
 }
 
 function grantRollsToSpecific() {
     const id = document.getElementById('select-player').value;
     const amt = parseInt(document.getElementById('grant-amt').value) || 0;
     players[id-1].rolls += amt;
+	players[id-1].totalRollsGiven += amt; //added
     updateUI();
+	broadcastState(); // sync with viewer
 }
 
 // --- 4. VISUAL DRAWING & UI ---
@@ -461,6 +569,7 @@ function updateUI() {
     const indicator = document.getElementById('turn-indicator');
     const rollBtn = document.getElementById('roll-btn');
 
+    // 1. Update Turn Indicator and Buttons
     if (totalGlobalRolls === 0) {
         indicator.innerText = "ADMIN ENTRY REQUIRED";
         indicator.style.color = "#ef4444";
@@ -476,6 +585,8 @@ function updateUI() {
     }
 
     document.getElementById('roll-counter').innerText = `Rolls: ${active.rolls}`;
+    
+    // 2. Clear and Rebuild Player Table
     const tbody = document.getElementById('player-rows');
     tbody.innerHTML = '';
 
@@ -489,21 +600,21 @@ function updateUI() {
         
         row.innerHTML = `
             <td><span style="color:${p.color}">●</span> ${p.name} ${isFinished ? '🚩' : ''}</td>
-            <td>${p.pos}</td>
+            <td>${p.pos === 0 ? 'START' : p.pos}</td>
             <td>${p.rolls}</td>
+            <td>${p.totalRollsGiven || 0}</td>
+            <td>${p.escapes || 0}</td>
         `;
         
         tbody.appendChild(row);
 
-        // AUTO-SCROLL LOGIC
         if (isCurrent) {
-            // Wait for DOM to update then scroll
             setTimeout(() => {
                 row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 100);
         }
 
-        // --- Token logic remains the same ---
+        // 3. TOKEN LOGIC: Handling Tile 0 Staggering
         let t = document.getElementById(`token-${p.id}`);    
         if (!t) {
             t = document.createElement('div');
@@ -511,9 +622,26 @@ function updateUI() {
             t.style.background = p.color; t.innerText = p.id;
             document.getElementById('tokens-layer').appendChild(t);
         }
-        const coords = getTileCenter(p.pos);
+
+        let coords;
+        if (p.pos === 0) {
+            // Define "Waiting Area" to the right of the first tile
+            const tile1 = getTileCenter(1);
+            coords = { 
+                x: tile1.x + 70, // Shift right of tile 1
+                y: tile1.y 
+            };
+        } else {
+            coords = getTileCenter(p.pos);
+        }
+
+        // Apply your staggered grid formula: (p.id % 5) * 4 for X and floor(p.id / 5) * 4 for Y
         t.style.left = (coords.x - 14 + (p.id % 5) * 4) + 'px';
         t.style.top = (coords.y - 14 + Math.floor(p.id / 5) * 4) + 'px';
+        
+        // Ensure tokens are visible if you previously had them hidden at pos 0
+        t.style.display = 'flex';
+        t.style.opacity = isFinished ? "0.4" : "1";
     });
 }
 
@@ -560,6 +688,7 @@ function saveGameState() {
     const dataToSave = {
         players: players,
         currentTurnIndex: currentTurnIndex,
+		roomId: peer.id, // added to save room as well for easier reconnection
         saveDate: new Date().toLocaleString(),
         gameConfig: {
             boardSize: boardSize,
@@ -590,27 +719,39 @@ function loadGameState(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const loadedData = JSON.parse(e.target.result);
+            const savedData = JSON.parse(e.target.result);
             
             // Validation
-            if (!loadedData.players || typeof loadedData.currentTurnIndex === 'undefined') {
+            if (!savedData.players || typeof savedData.currentTurnIndex === 'undefined') {
                 throw new Error("Invalid save file format.");
             }
 
             // Restore State
-            players = loadedData.players;
-            currentTurnIndex = loadedData.currentTurnIndex;
+            players = savedData.players;
+            currentTurnIndex = savedData.currentTurnIndex;
             
+			// 2. Check for Saved Room ID
+            if (savedData.roomId && savedData.roomId !== peer.id) {
+				const confirmRestart = confirm("This save file contains a specific Room ID. To keep the same connection for viewers, the page will refresh. Continue?");
+					if (confirmRestart) {
+						// Store the ID in localStorage so the Peer constructor can find it after refresh
+						localStorage.setItem('pending_room_id', savedData.roomId);
+						localStorage.setItem('pending_game_state', JSON.stringify(savedData));
+						location.reload(); 
+						return;
+					}
+			}
             // Refresh the UI to show new positions and names
             updateUI();
+            broadcastState();
             
             // Redraw portals in case the save file had a different map config
-            if(loadedData.gameConfig && loadedData.gameConfig.portals) {
+            if(savedData.gameConfig && savedData.gameConfig.portals) {
                 // portals = loadedData.gameConfig.portals; // Uncomment if you want map to change too
                 drawPortals(); 
             }
 
-            alert("Game Loaded: Continued from " + (loadedData.saveDate || "previous session"));
+            alert("Game Loaded: Continued from " + (savedData.saveDate || "previous session"));
             
             // Reset the file input so the same file can be loaded again if needed
             event.target.value = '';
@@ -810,4 +951,51 @@ function runAutoplayStep() {
     autoplayTimer = setTimeout(runAutoplayStep, 1000);
 }
 
+/**
+ * DEBUG: Jump to a Snake
+ * Teleports the current player to the first available snake head to test choices.
+ */
+function debugSnake() {
+    const player = players[currentTurnIndex];
+    // Find all tiles that are snake heads (Start > End)
+    const snakes = Object.keys(portals).filter(start => parseInt(start) > portals[start]);
+    
+    if (snakes.length > 0) {
+        const targetSnake = parseInt(snakes[0]); // Pick the first one (e.g., 22)
+        console.log(`🛠️ Debug: Moving ${player.name} to Snake at tile ${targetSnake}`);
+        
+        player.pos = targetSnake;
+        updateUI();
+        broadcastState();
+        
+        // Trigger the interactive logic
+        checkPortalsAndFinish(player);
+    } else {
+        console.error("No snakes found in the portals configuration!");
+    }
+}
+
+/**
+ * DEBUG: Jump to a Ladder
+ * Teleports the current player to the first available ladder to test automatic climbing.
+ */
+function debugLadder() {
+    const player = players[currentTurnIndex];
+    // Find all tiles that are ladders (End > Start)
+    const ladders = Object.keys(portals).filter(start => portals[start] > parseInt(start));
+    
+    if (ladders.length > 0) {
+        const targetLadder = parseInt(ladders[0]); // Pick the first one (e.g., 2)
+        console.log(`🛠️ Debug: Moving ${player.name} to Ladder at tile ${targetLadder}`);
+        
+        player.pos = targetLadder;
+        updateUI();
+        broadcastState();
+        
+        // Trigger the automatic climb logic
+        checkPortalsAndFinish(player);
+    } else {
+        console.error("No ladders found in the portals configuration!");
+    }
+}
 window.onload = init;
