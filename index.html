@@ -12,12 +12,21 @@
         <aside id="status-panel">
             <h2 class="tiger-text">🐯 Rankings</h2>
             <div id="p2p-info" style="background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--accent);">
-                <div style="font-size: 12px;">Room ID: <b id="my-id" style="color:white">Connecting...</b></div>
-                <div style="font-size: 11px;">Viewers Connected: <span id="viewer-count" style="color:var(--accent)">0</span></div>
+                <div style="font-size: 12px; text-align: center;">Room ID:</div>
+                <div style="font-size: 12px; text-align: center;"><b id="my-id" style="color:white">Connecting...</b></div>
+				<div style="font-size: 11px; text-align: center;">Viewers Connected: <span id="viewer-count" style="color:var(--accent)">0</span></div>
             </div>
             <div id="leaderboard-container">
                 <table id="leaderboard">
-                    <thead><tr><th>Player</th><th>Pos</th><th>Rolls</th></tr></thead>
+                    <thead>
+						<tr>
+							<th>Player</th>
+							<th>Pos</th>
+							<th>Rolls Left</th>
+							<th>Total Given</th>
+							<th>Escapes</th>
+						</tr>
+					</thead>
                     <tbody id="player-rows"></tbody>
                 </table>
             </div>
@@ -126,15 +135,20 @@
                     <button class="admin-btn save-btn" onclick="saveGameState()">💾 Save Game to File</button>
                     <label for="load-file" class="admin-btn load-label">📂 Load Game File</label>
                     <input type="file" id="load-file" accept=".json" onchange="loadGameState(event)" style="display:none;">
-					<button class="secondary-btn" onclick="toggleAutoplay()" style="background: #8b5cf6;">🤖 Toggle Autoplay</button>
-                    </div><button class="logout-btn" onclick="logoutAdmin()">Logout Admin</button>
+					<div class="admin-controls" style="margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px;">
+						<p><strong>Debug Tools:</strong></p>
+						<button class="secondary-btn" onclick="debugSnake()" style="background:#ef4444; color:white; padding:5px;">Test Snake</button>
+						<button class="secondary-btn" onclick="debugLadder()" style="background:#10b981; color:white; padding:5px;">Test Ladder</button>
+						<button class="secondary-btn" onclick="toggleAutoplay()" style="background: #8b5cf6;">🤖 Toggle Autoplay</button>
+                    </div>
+					</div><button class="logout-btn" onclick="logoutAdmin()">Logout Admin</button>
                 </div>
             </section>
             </aside>
     </div>
 
     <div id="event-modal" class="modal-overlay hidden">
-        <div class="modal-content"><h2 id="modal-title"></h2><p id="modal-text"></p><button id="modal-confirm-btn">OK</button></div>
+        <div class="modal-content"><h2 id="modal-title"></h2><p id="modal-text"></p><button id="modal-confirm-btn" class="primary-btn" style="display: inline-block;">OK</button></div>
     </div>
     <div id="fireworks-container" class="hidden"></div>
 
@@ -143,6 +157,6 @@
     <audio id="tiger-roar" src="tiger-roar-loudly-193229.mp3"></audio>
     <audio id="firework-sound" src="fireworks-402788.mp3" loop></audio>
 
-    <script src="script.js"></script>
+    <script src="script-player.js"></script>
 </body>
 </html>
