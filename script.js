@@ -1,5 +1,11 @@
 // --- 1. PLAYER & MAP CONFIGURATION ---
-const playerNames = ["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Kevin", "Liam", "Mallory", "Niaj", "Oscar", "Peggy", "Quentin", "Rupert", "Sybil", "Trent"];
+const playerNames = ["Basestar/iStarBattery",
+				"Finance", "GeoTap", "HR", 
+				"ICruise", "IGen/PulseStar", "IT", 
+				"Jetpulse/MrTC", "Lithostar/Batsonic",
+				"Logistics", "MEIE", "PCB", "Planning",
+				"Probes", "Procurement", "Safety", 
+				"Warehouse"];
 const adminPassword = "admin123";
 const boardSize = 64;
 const columns = 8;
