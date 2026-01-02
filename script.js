@@ -1,11 +1,11 @@
 // --- 1. PLAYER & MAP CONFIGURATION ---
-const playerNames = ["Basestar/iStarBattery",
-				"Finance", "GeoTap", "HR", 
-				"ICruise", "IGen/PulseStar", "IT", 
-				"Jetpulse/MrTC", "Lithostar/Batsonic",
-				"Logistics", "MEIE", "PCB", "Planning",
-				"Probes", "Procurement", "Safety", 
-				"Warehouse"];
+const playerNames = ["Basestar/Standalone/Geotap",
+				"Demand Planning", "Finance", "GeoTap", "HR", 
+				"ICruise", "IT", "iStarBattery/Batsonic",
+				"Lithostar", "MEIE", "PCB", "Planning",
+				"Procurement", "Production Planning", "Pulser/Probe",
+				"Quality", "Resistivity", "Safety", "Triage/Geopilot", 
+				"Warehouse/Shipping/Logistic"];
 const adminPassword = "admin123";
 const boardSize = 64;
 const columns = 8;
