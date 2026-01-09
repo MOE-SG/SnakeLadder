@@ -1,5 +1,5 @@
 // --- 1. PLAYER & MAP CONFIGURATION ---
-const playerNames = ["Red Leo x Pro", "STAR TEAM", "O.m.O", "Five Guys", "Litho Force Unit", "MRTC TIGER"];
+const playerNames = ["Red Leo x Pro", "STAR TEAM", "O.m.O", "H2 Bull", "Litho Force Unit", "MRTC TIGER"];
 const adminPassword = "admin123";
 const boardSize = 64;
 const columns = 8;
