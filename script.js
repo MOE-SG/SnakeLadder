@@ -898,7 +898,7 @@ function debugWin() {
     const player = players[currentTurnIndex];
     console.log(`Debugging win for: ${player.name}`);
     
-    player.pos = 64;      // Move to goal
+    player.pos = 100;      // Move to goal
     player.rolls = 0;     // Ensure no rolls left
     updateUI();           // Update board
     finalizeTurn(player); // Trigger win logic
