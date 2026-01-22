@@ -1,8 +1,8 @@
 // --- 1. PLAYER & MAP CONFIGURATION ---
 const playerNames = ["Red Leo x Pro", "STAR TEAM", "O.m.O", "H2 Bull", "Litho Force Unit", "MRTC TIGER", "SONIC TIGERS","ZERO DEFECT SQUAD","Genting Kaki"];
 const adminPassword = "admin123";
-const boardSize = 64;
-const columns = 8;
+const boardSize = 100;
+const columns = 10;
 const pendingId = localStorage.getItem('pending_room_id');
 const pendingState = localStorage.getItem('pending_game_state');
 // SPECIFY PORTALS HERE: { StartTile: EndTile }
