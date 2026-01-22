@@ -8,8 +8,8 @@ const pendingState = localStorage.getItem('pending_game_state');
 // SPECIFY PORTALS HERE: { StartTile: EndTile }
 // If End > Start, it's a Ladder. If Start > End, it's a Snake.
 const portals = { 
-    2: 18, 10: 30, 25: 45, 42: 59, // Ladders
-    22: 4, 37: 15, 50: 32, 62: 40  // Snakes
+    2: 18, 10: 30, 25: 45, 42: 59, 57:94, 46:73, // Ladders
+    22: 4, 37: 15, 50: 32, 62: 40, 97:48, 88:52, 68:35, 78: 65   // Snakes
 };
 
 // --- 1. PLAYER CONFIGURATION (Updated) ---
@@ -512,6 +512,7 @@ function drawPortals() {
     const portalKeys = Object.keys(portals);
 
     // --- PASS 1: DRAW ALL SNAKES FIRST (Bottom Layer) ---
+	//     22: 4, 37: 15, 50: 32, 62: 40  // Snakes
     portalKeys.forEach(start => {
         const end = portals[start];
         if (end < start) { // It's a Snake
@@ -527,8 +528,8 @@ function drawPortals() {
             use.setAttribute("transform", `
                 translate(${s.x}, ${s.y}) 
                 rotate(${angle}) 
-                scale(${dist / 300}, 1) 
-                translate(-40, -40)
+                scale(${dist / 320},0.5) 
+                translate(120, 30)
             `);
             svg.appendChild(use);
         }
@@ -544,13 +545,13 @@ function drawPortals() {
 			const tile = document.getElementById(`tile-${start}`);
             const hX = tile.offsetWidth / 2;
             const hY = tile.offsetHeight / 2;
-			const s = getTilePoint(start, hX, hY); 
-            const e = getTilePoint(end, hX, hY);
-            const dx = e.x - s.x;
-            const dy = e.y - s.y;
+			const s = getTilePoint(start, 0, 0); 
+            const e = getTilePoint(end, 0, 0);
+            const dx = s.x - e.x;
+            const dy = s.y - e.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const angle = (Math.atan2(dy, dx) * (180 / Math.PI))+130;
-			const flipThreshold = 40;
+            const angle = (Math.atan2(dy, dx) * (180 / Math.PI));
+			const flipThreshold = 180;
             const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
             use.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#tiger-template");
             const flip = Math.abs(angle) > flipThreshold ? -1 : 1;
@@ -558,31 +559,13 @@ function drawPortals() {
 			const baseHeight = 1000; 
 			const scaleY = dist/baseHeight;
             console.log(`🪜 Ladder (${start} to ${end}): sx=${s.x}, sy=${s.y}, ex=${e.x}, ey=${e.y}, dx=${dx.toFixed(2)}, dy=${dy.toFixed(2)}, dist=${dist.toFixed(2)}, scaleY=${scaleY.toFixed(2)}, angle = ${angle.toFixed(2)}`);
-			//const scaleX = dist / baseHeight;
-			if (i==1){
 			use.setAttribute("transform", `
-				translate(480, 420)
-				scale(0.25,0.2)
-				rotate(30)	
+                translate(${s.x}, ${s.y}) 
+				rotate(${angle-90}) 
+                scale(0.7,${dist / 250}) 
+				translate(-40, -220)
             `);
-			}else if (i==2){
-			use.setAttribute("transform", `
-				translate(${e.x-10}, ${e.y-10})
-				rotate(50)	
-				scale(-0.2,0.52)
-            `);
-			}else if (i==3){
-			use.setAttribute("transform", `
-				translate(${e.x-20}, ${e.y-10})
-				rotate(50)	
-				scale(-0.2,0.52)
-            `);
-			}else if (i==4){
-			use.setAttribute("transform", `
-				translate(${e.x-10}, ${e.y-30})
-				rotate(0)	
-				scale(-0.25,0.25)
-            `);}
+			
 			svg.appendChild(use);
         }
     });
@@ -958,8 +941,23 @@ function runAutoplayStep() {
     // 2. Logic Branching
     if (isModalVisible) {
         // Automatically click "OK" on snakes, ladders, or win screens
-        console.log("Autoplay: Dismissing Modal...");
-        document.getElementById('modal-confirm-btn').click();
+        //console.log("Autoplay: Dismissing Modal...");
+        //document.getElementById('modal-confirm-btn').click();
+
+		// --- NEW LOGIC FOR SNAKE ENCOUNTERS ---
+        const choiceBtn = document.getElementById('modal-choice-btn');
+        // Check if the choice button exists and is visible
+        const isChoiceVisible = choiceBtn && choiceBtn.style.display !== "none";
+
+        if (isChoiceVisible) {
+            // If it's a snake choice, always pick the second option ("Bitten")
+            console.log("Autoplay: Snake Encounter - Choosing 'Bitten'...");
+            choiceBtn.click();
+		} else {
+            // Otherwise, it's a standard "OK" modal (Ladder or Win)
+            console.log("Autoplay: Dismissing Modal...");
+            document.getElementById('modal-confirm-btn').click();
+        }
     } 
     else if (!isAnimating) {
         // If it is the current player's turn and they have rolls, roll the dice
