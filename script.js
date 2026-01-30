@@ -1,5 +1,5 @@
 // --- 1. PLAYER & MAP CONFIGURATION ---
-const playerNames = ["Red Leo x Pro", "STAR TEAM", "O.m.O", "H2 Bull", "Litho Force Unit", "MRTC TIGER", "SONIC TIGERS","ZERO DEFECT SQUAD","Genting Kaki","Tuas Lakers","Elite QC Squad","CDC Vouchers","Red X Tigris"];
+const playerNames = ["Red Leo x Pro", "STAR TEAM", "O.m.O", "H2 Bull", "Litho Force Unit", "MRTC TIGER", "SONIC TIGERS","ZERO DEFECT SQUAD","Genting Kaki","Tuas Lakers","Elite QC Squad","CDC Vouchers","Red X Tigris","SNAKE BYTE SQUAD"];
 const adminPassword = "admin123";
 const boardSize = 100;
 const columns = 10;
